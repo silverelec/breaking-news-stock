@@ -1,0 +1,62 @@
+name: Daily Market Brief
+
+on:
+  schedule:
+    # 02:30 UTC = 8:00 AM IST (Indian market opens at 9:15 AM IST)
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+    # Allow manual trigger from GitHub Actions UI for testing
+
+jobs:
+  send-brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Create .tmp directory
+        run: mkdir -p .tmp
+
+      - name: Create .env from secrets
+        run: |
+          cat > .env << EOF
+          NEWSAPI_KEY=${{ secrets.NEWSAPI_KEY }}
+          FINNHUB_API_KEY=${{ secrets.FINNHUB_API_KEY }}
+          POLYGON_API_KEY=${{ secrets.POLYGON_API_KEY }}
+          ALPHAVANTAGE_KEY=${{ secrets.ALPHAVANTAGE_KEY }}
+          ANTHROPIC_API_KEY=${{ secrets.ANTHROPIC_API_KEY }}
+          EMAIL_FROM=${{ secrets.EMAIL_FROM }}
+          EMAIL_TO=${{ secrets.EMAIL_TO }}
+          EMAIL_PASSWORD=${{ secrets.EMAIL_PASSWORD }}
+          RECIPIENT_NAME=${{ secrets.RECIPIENT_NAME }}
+          EOF
+
+      - name: Run daily brief pipeline
+        run: python tools/run_daily_brief.py
+
+      - name: Upload HTML preview as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: email-preview-${{ github.run_number }}
+          path: .tmp/email_content.html
+          retention-days: 7
+
+      - name: Upload run log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: run-log-${{ github.run_number }}
+          path: .tmp/run_log.json
+          retention-days: 30
